@@ -1,0 +1,48 @@
+public class InvocableQueryObject {
+    
+    public class queryRequest {
+        //ID of record that is being queried
+        @InvocableVariable(label='Object ID' description='ID of the SObject being queried' required=true)
+        public ID sobjID; 
+        //List of fields 
+        @InvocableVariable(label='Query Fields' description='Fields you want returned. If null it will return all fields.')
+        public LIST<String> sobjFields;
+
+    }
+	@InvocableMethod(label='Query SObject' description='Accepts IDs and returns the sobject' category='Utility')
+    public static LIST<SObject> QuerySObject(LIST<queryRequest> requests){
+        LIST<SObject> responses = NEW LIST<SObject>();
+        ID oID = requests[0].sobjID;
+        DescribeSObjectResult describeResult = oID.getSObjectType().getDescribe();
+        
+        //Build up dynamic query
+        string query = 'SELECT ';
+        
+        string fields = '';
+        IF(requests[0].sobjFields==NULL||requests[0].sobjFields.isEmpty()){
+            // Get all of the fields on the object
+            Map<String, Schema.SObjectField> fieldMap = describeResult.fields.getMap();  
+            Set<String> fieldNames = fieldMap.keySet();
+        	LIST<String> fieldList = NEW LIST<String>(fieldNames);
+            fields = string.join(fieldList , ',');
+        }ELSE{
+            fields = string.join(requests[0].sobjFields , ',');
+        }
+        query= query + fields + ' ';
+
+        query = query + 'FROM ' + describeResult.getName();
+        //Creating a list of all the ID for querying 
+        LIST<ID> sobjIDs = NEW LIST<ID>();
+        FOR (queryRequest request : requests) {
+            sobjIDs.add(request.sobjID);
+        }
+        String qwhere = ' WHERE Id IN (\'' + string.join(sobjIDs,'\',\'')+'\')';        
+		query = query + qwhere;
+        system.debug('InvocableQueryObject query+++'+query);
+        FOR (sObject r : Database.query(query)) { 
+                  responses.add(r);
+        }
+        
+        return responses;
+    }
+}
